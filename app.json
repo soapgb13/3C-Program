@@ -1,0 +1,38 @@
+{
+  "expo": {
+    "name": "3c-programme",
+    "slug": "snack-beed74ab-809c-4f14-a36d-4233f90e68d7",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "edgeToEdgeEnabled": true,
+      "package": "com.gamerboy13.snackbeed74ab809c4f14a36d4233f90e68d7"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "51b2c4cb-ae44-4e95-8398-0b1aef21591c"
+      }
+    },
+    "plugins": [
+      "expo-font"
+    ]
+  }
+}
