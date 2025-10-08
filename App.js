@@ -91,6 +91,14 @@ function SmallButton({ onPress, title }) {
     );
 }
 
+function Header() {
+    return (
+        <View style={styles.header}>
+            <Text style={styles.headerTitle}>Break the 3C Cycle — Daily Reset</Text>
+        </View>
+    );
+}
+
 export default function App() {
     const todayKey = getTodayKey();
     const [entries, setEntries] = useState({});
@@ -207,7 +215,7 @@ export default function App() {
     return (
         <SafeAreaView style={styles.container}>
             <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-                <Text style={styles.title}>Break the 3C Cycle — Daily Reset</Text>
+                <Header />
                 <Text style={styles.subtitle}>Date: {todayKey}</Text>
 
                 <Section title="Morning — Gratitude (2 min)">
@@ -219,6 +227,7 @@ export default function App() {
                             onChangeText={(t) => updateGratitude(i, t)}
                             placeholder={`Gratitude ${i + 1}`}
                             style={styles.input}
+                            placeholderTextColor="#88888888"
                         />
                     ))}
                 </Section>
@@ -244,6 +253,7 @@ export default function App() {
                         placeholder="How can I reframe this?"
                         style={[styles.input, { height: 80 }]}
                         multiline
+                        placeholderTextColor="#88888888"
                     />
                 </Section>
 
@@ -254,6 +264,7 @@ export default function App() {
                         onChangeText={(t) => updateNightField('wentWell', t)}
                         placeholder="Went well..."
                         style={styles.input}
+                        placeholderTextColor="#88888888"
                     />
                     <Text style={styles.label}>One thing I handled better than before</Text>
                     <TextInput
@@ -261,6 +272,7 @@ export default function App() {
                         onChangeText={(t) => updateNightField('handled', t)}
                         placeholder="Handled better..."
                         style={styles.input}
+                        placeholderTextColor="#88888888"
                     />
                     <Text style={styles.label}>One thing to improve tomorrow</Text>
                     <TextInput
@@ -268,6 +280,7 @@ export default function App() {
                         onChangeText={(t) => updateNightField('improve', t)}
                         placeholder="Improve tomorrow..."
                         style={styles.input}
+                        placeholderTextColor="#88888888"
                     />
                 </Section>
 
@@ -308,6 +321,26 @@ function getTodayKey() {
 
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: '#fff' },
+    header: {
+        backgroundColor: '#0b7cff',
+        paddingVertical: 24,
+        paddingHorizontal: 16,
+        alignItems: 'center',
+        borderBottomLeftRadius: 16,
+        borderBottomRightRadius: 16,
+        marginBottom: 8,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 3,
+    },
+    headerTitle: {
+        color: '#fff',
+        fontSize: 24,
+        fontWeight: 'bold',
+        letterSpacing: 0.5,
+    },
     content: { padding: 16, paddingBottom: 40 },
     title: { fontSize: 20, fontWeight: '700', marginBottom: 4 },
     subtitle: { color: '#444', marginBottom: 12 },
