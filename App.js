@@ -19,6 +19,7 @@ import {
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
+import HistoryTab from './components/HistoryTab';
 
 // NOTE: We avoid a static top-level `import AsyncStorage from '@react-native-async-storage/async-storage'`
 // because some bundlers/environments (web preview, certain snack/embed systems) fail to resolve
@@ -313,7 +314,7 @@ export default function App() {
                         delete updated[todayKey];
                         await Storage.setItem(STORAGE_KEY, JSON.stringify(updated));
                         setEntries(updated);
-                        setCurrent(getEmptyEntry());
+                        setCurrent(getEmptyEntry()); // Ensure UI clears immediately
                     } catch (e) {
                         console.warn('Clear failed', e);
                         Alert.alert('Error', 'Could not clear today.');
@@ -332,7 +333,7 @@ export default function App() {
                     tabBarIcon: ({ color, size }) => {
                         let iconName;
                         if (route.name === 'Home') iconName = 'home';
-                        else if (route.name === 'History') iconName = 'time';
+                        else if (route.name === 'History') iconName = 'calendar';
                         return <Ionicons name={iconName} size={size} color={color} />;
                     },
                     tabBarActiveTintColor: '#0b7cff',
@@ -342,7 +343,13 @@ export default function App() {
             >
                 <Tab.Screen
                     name="Home"
-                    component={() => (
+                    options={{
+                        tabBarIcon: ({ color, size }) => (
+                            <Ionicons name="home" color={color} size={size} />
+                        ),
+                    }}
+                >
+                    {() => (
                         <HomeScreen
                             todayKey={todayKey}
                             current={current}
@@ -354,11 +361,17 @@ export default function App() {
                             clearToday={clearToday}
                         />
                     )}
-                />
+                </Tab.Screen>
                 <Tab.Screen
                     name="History"
-                    component={() => <HistoryScreen entries={entries} />}
-                />
+                    options={{
+                        tabBarIcon: ({ color, size }) => (
+                            <Ionicons name="calendar" color={color} size={size} />
+                        ),
+                    }}
+                >
+                    {() => <HistoryTab entries={entries} />}
+                </Tab.Screen>
             </Tab.Navigator>
         </NavigationContainer>
     );
@@ -390,11 +403,7 @@ const styles = StyleSheet.create({
         borderBottomLeftRadius: 16,
         borderBottomRightRadius: 16,
         marginBottom: 8,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 3,
+        boxShadow: '0px 2px 4px rgba(0,0,0,0.1)', // modern shadow property
     },
     headerTitle: {
         color: '#fff',
