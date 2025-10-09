@@ -16,6 +16,9 @@ import {
     StyleSheet,
     ScrollView,
 } from 'react-native';
+import { NavigationContainer } from '@react-navigation/native';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { Ionicons } from '@expo/vector-icons';
 
 // NOTE: We avoid a static top-level `import AsyncStorage from '@react-native-async-storage/async-storage'`
 // because some bundlers/environments (web preview, certain snack/embed systems) fail to resolve
@@ -99,18 +102,149 @@ function Header() {
     );
 }
 
+function HistoryScreen({ entries }) {
+    const historyArray = Object.keys(entries || {})
+        .sort((a, b) => b.localeCompare(a))
+        .slice(0, 7)
+        .map((k) => ({ key: k, value: entries[k] }));
+
+    function renderHistoryItem({ item }) {
+        const key = item?.key ?? 'unknown';
+        const value = item?.value ?? {};
+        const morningGratitude = (value.morning && Array.isArray(value.morning.gratitude)) ? value.morning.gratitude : [];
+        const morningCount = morningGratitude.filter(Boolean).length;
+        const caught = (value.midday && Array.isArray(value.midday.caught)) ? value.midday.caught : [];
+        const caughtCount = caught.filter(Boolean).length;
+        const nightFilled = [value.night?.wentWell, value.night?.handled, value.night?.improve].filter(Boolean).length;
+        return (
+            <View style={styles.historyItem}>
+                <Text style={styles.historyDate}>{key}</Text>
+                <Text style={styles.historyMeta}>Gratitude: {morningCount} • Caught: {caughtCount} • Night: {nightFilled}</Text>
+            </View>
+        );
+    }
+
+    return (
+        <SafeAreaView style={styles.container}>
+            <ScrollView contentContainerStyle={styles.content}>
+                <Header />
+                <Section title="Last 7 days — Summary">
+                    {historyArray.length === 0 ? (
+                        <Text style={styles.muted}>No entries yet — they will appear here after you save.</Text>
+                    ) : (
+                        <FlatList data={historyArray} keyExtractor={(item) => item.key} renderItem={renderHistoryItem} />
+                    )}
+                </Section>
+            </ScrollView>
+        </SafeAreaView>
+    );
+}
+
+function HomeScreen({ todayKey, current, updateGratitude, toggleMidC, updateMidReframe, updateNightField, saveCurrent, clearToday }) {
+    return (
+        <SafeAreaView style={styles.container}>
+            <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+                <Header />
+                <Text style={styles.subtitle}>Date: {todayKey}</Text>
+                <Section title="Morning — Gratitude (2 min)">
+                    <Text style={styles.label}>List 3 things you're grateful for</Text>
+                    {(current?.morning?.gratitude ?? ['', '', '']).map((g, i) => (
+                        <TextInput
+                            key={i}
+                            value={g}
+                            onChangeText={(t) => updateGratitude(i, t)}
+                            placeholder={`Gratitude ${i + 1}`}
+                            style={styles.input}
+                            placeholderTextColor="#88888888"
+                        />
+                    ))}
+                </Section>
+                <Section title="Midday — Awareness Check (1 min)">
+                    <Text style={styles.label}>Did you notice any of these?</Text>
+                    <View style={styles.rowWrap}>
+                        {['Complaining', 'Comparing', 'Criticizing'].map((label, idx) => (
+                            <TouchableOpacity
+                                key={label}
+                                style={[styles.checkbox, (current?.midday?.caught?.[idx]) && styles.checkboxOn]}
+                                onPress={() => toggleMidC(idx)}
+                            >
+                                <Text style={styles.checkboxText}>{current?.midday?.caught?.[idx] ? '✓' : '+'}</Text>
+                                <Text style={styles.checkboxLabel}>{label}</Text>
+                            </TouchableOpacity>
+                        ))}
+                    </View>
+                    <Text style={[styles.label, { marginTop: 8 }]}>Reframe / Note</Text>
+                    <TextInput
+                        value={current?.midday?.reframe ?? ''}
+                        onChangeText={updateMidReframe}
+                        placeholder="How can I reframe this?"
+                        style={[styles.input, { height: 80 }]}
+                        multiline
+                        placeholderTextColor="#88888888"
+                    />
+                </Section>
+                <Section title="Night — Growth Reflection (2 min)">
+                    <Text style={styles.label}>One thing that went well</Text>
+                    <TextInput
+                        value={current?.night?.wentWell ?? ''}
+                        onChangeText={(t) => updateNightField('wentWell', t)}
+                        placeholder="Went well..."
+                        style={styles.input}
+                        placeholderTextColor="#88888888"
+                    />
+                    <Text style={styles.label}>One thing I handled better than before</Text>
+                    <TextInput
+                        value={current?.night?.handled ?? ''}
+                        onChangeText={(t) => updateNightField('handled', t)}
+                        placeholder="Handled better..."
+                        style={styles.input}
+                        placeholderTextColor="#88888888"
+                    />
+                    <Text style={styles.label}>One thing to improve tomorrow</Text>
+                    <TextInput
+                        value={current?.night?.improve ?? ''}
+                        onChangeText={(t) => updateNightField('improve', t)}
+                        placeholder="Improve tomorrow..."
+                        style={styles.input}
+                        placeholderTextColor="#88888888"
+                    />
+                </Section>
+                <View style={styles.actionsRow}>
+                    <SmallButton title="Save Today" onPress={saveCurrent} />
+                    <SmallButton title="Clear Today" onPress={clearToday} />
+                </View>
+                <View style={{ height: 40 }} />
+            </ScrollView>
+        </SafeAreaView>
+    );
+}
+
+const Tab = createBottomTabNavigator();
+
+const HomeScreenWrapper = (props) => (
+    <HomeScreen
+        todayKey={props.todayKey}
+        current={props.current}
+        updateGratitude={props.updateGratitude}
+        toggleMidC={props.toggleMidC}
+        updateMidReframe={props.updateMidReframe}
+        updateNightField={props.updateNightField}
+        saveCurrent={props.saveCurrent}
+        clearToday={props.clearToday}
+    />
+);
+
+const HistoryScreenWrapper = (props) => (
+    <HistoryScreen entries={props.entries} />
+);
+
 export default function App() {
     const todayKey = getTodayKey();
     const [entries, setEntries] = useState({});
     const [current, setCurrent] = useState(getEmptyEntry());
     const [loading, setLoading] = useState(true);
 
-    useEffect(() => {
-        loadEntries();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
-
-    // Whenever entries or loading or todayKey changes, ensure `current` represents today's entry
+    useEffect(() => { loadEntries(); }, []);
     useEffect(() => {
         if (!loading) {
             const saved = entries && entries[todayKey];
@@ -189,117 +323,44 @@ export default function App() {
         ]);
     }
 
-    function renderHistoryItem({ item }) {
-        // defensive checks as saved data structure may be missing fields
-        const key = item?.key ?? 'unknown';
-        const value = item?.value ?? {};
-        const morningGratitude = (value.morning && Array.isArray(value.morning.gratitude)) ? value.morning.gratitude : [];
-        const morningCount = morningGratitude.filter(Boolean).length;
-        const caught = (value.midday && Array.isArray(value.midday.caught)) ? value.midday.caught : [];
-        const caughtCount = caught.filter(Boolean).length;
-        const nightFilled = [value.night?.wentWell, value.night?.handled, value.night?.improve].filter(Boolean).length;
-
-        return (
-            <View style={styles.historyItem}>
-                <Text style={styles.historyDate}>{key}</Text>
-                <Text style={styles.historyMeta}>Gratitude: {morningCount} • Caught: {caughtCount} • Night: {nightFilled}</Text>
-            </View>
-        );
-    }
-
-    const historyArray = Object.keys(entries || {})
-        .sort((a, b) => b.localeCompare(a))
-        .slice(0, 7)
-        .map((k) => ({ key: k, value: entries[k] }));
+    if (loading) return <View style={styles.container}><Text>Loading...</Text></View>;
 
     return (
-        <SafeAreaView style={styles.container}>
-            <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-                <Header />
-                <Text style={styles.subtitle}>Date: {todayKey}</Text>
-
-                <Section title="Morning — Gratitude (2 min)">
-                    <Text style={styles.label}>List 3 things you're grateful for</Text>
-                    {(current?.morning?.gratitude ?? ['','','']).map((g, i) => (
-                        <TextInput
-                            key={i}
-                            value={g}
-                            onChangeText={(t) => updateGratitude(i, t)}
-                            placeholder={`Gratitude ${i + 1}`}
-                            style={styles.input}
-                            placeholderTextColor="#88888888"
+        <NavigationContainer>
+            <Tab.Navigator
+                screenOptions={({ route }) => ({
+                    tabBarIcon: ({ color, size }) => {
+                        let iconName;
+                        if (route.name === 'Home') iconName = 'home';
+                        else if (route.name === 'History') iconName = 'time';
+                        return <Ionicons name={iconName} size={size} color={color} />;
+                    },
+                    tabBarActiveTintColor: '#0b7cff',
+                    tabBarInactiveTintColor: '#888',
+                    headerShown: false,
+                })}
+            >
+                <Tab.Screen
+                    name="Home"
+                    component={() => (
+                        <HomeScreen
+                            todayKey={todayKey}
+                            current={current}
+                            updateGratitude={updateGratitude}
+                            toggleMidC={toggleMidC}
+                            updateMidReframe={updateMidReframe}
+                            updateNightField={updateNightField}
+                            saveCurrent={saveCurrent}
+                            clearToday={clearToday}
                         />
-                    ))}
-                </Section>
-
-                <Section title="Midday — Awareness Check (1 min)">
-                    <Text style={styles.label}>Did you notice any of these?</Text>
-                    <View style={styles.rowWrap}>
-                        {['Complaining', 'Comparing', 'Criticizing'].map((label, idx) => (
-                            <TouchableOpacity
-                                key={label}
-                                style={[styles.checkbox, (current?.midday?.caught?.[idx]) && styles.checkboxOn]}
-                                onPress={() => toggleMidC(idx)}
-                            >
-                                <Text style={styles.checkboxText}>{current?.midday?.caught?.[idx] ? '✓' : '+'}</Text>
-                                <Text style={styles.checkboxLabel}>{label}</Text>
-                            </TouchableOpacity>
-                        ))}
-                    </View>
-                    <Text style={[styles.label, { marginTop: 8 }]}>Reframe / Note</Text>
-                    <TextInput
-                        value={current?.midday?.reframe ?? ''}
-                        onChangeText={updateMidReframe}
-                        placeholder="How can I reframe this?"
-                        style={[styles.input, { height: 80 }]}
-                        multiline
-                        placeholderTextColor="#88888888"
-                    />
-                </Section>
-
-                <Section title="Night — Growth Reflection (2 min)">
-                    <Text style={styles.label}>One thing that went well</Text>
-                    <TextInput
-                        value={current?.night?.wentWell ?? ''}
-                        onChangeText={(t) => updateNightField('wentWell', t)}
-                        placeholder="Went well..."
-                        style={styles.input}
-                        placeholderTextColor="#88888888"
-                    />
-                    <Text style={styles.label}>One thing I handled better than before</Text>
-                    <TextInput
-                        value={current?.night?.handled ?? ''}
-                        onChangeText={(t) => updateNightField('handled', t)}
-                        placeholder="Handled better..."
-                        style={styles.input}
-                        placeholderTextColor="#88888888"
-                    />
-                    <Text style={styles.label}>One thing to improve tomorrow</Text>
-                    <TextInput
-                        value={current?.night?.improve ?? ''}
-                        onChangeText={(t) => updateNightField('improve', t)}
-                        placeholder="Improve tomorrow..."
-                        style={styles.input}
-                        placeholderTextColor="#88888888"
-                    />
-                </Section>
-
-                <View style={styles.actionsRow}>
-                    <SmallButton title="Save Today" onPress={saveCurrent} />
-                    <SmallButton title="Clear Today" onPress={clearToday} />
-                </View>
-
-                <Section title="Last 7 days — Summary">
-                    {historyArray.length === 0 ? (
-                        <Text style={styles.muted}>No entries yet — they will appear here after you save.</Text>
-                    ) : (
-                        <FlatList data={historyArray} keyExtractor={(item) => item.key} renderItem={renderHistoryItem} />
                     )}
-                </Section>
-
-                <View style={{ height: 40 }} />
-            </ScrollView>
-        </SafeAreaView>
+                />
+                <Tab.Screen
+                    name="History"
+                    component={() => <HistoryScreen entries={entries} />}
+                />
+            </Tab.Navigator>
+        </NavigationContainer>
     );
 }
 
