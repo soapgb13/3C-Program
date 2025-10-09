@@ -15,11 +15,14 @@ import {
     Alert,
     StyleSheet,
     ScrollView,
+    Modal,
 } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import HistoryTab from './components/HistoryTab';
+import { Calendar } from 'react-native-calendars';
+import TopBar from './components/TopBar';
 
 // NOTE: We avoid a static top-level `import AsyncStorage from '@react-native-async-storage/async-storage'`
 // because some bundlers/environments (web preview, certain snack/embed systems) fail to resolve
@@ -141,81 +144,143 @@ function HistoryScreen({ entries }) {
     );
 }
 
-function HomeScreen({ todayKey, current, updateGratitude, toggleMidC, updateMidReframe, updateNightField, saveCurrent, clearToday }) {
+function HomeScreen({ todayKey, current, updateGratitude, toggleMidC, updateMidReframe, updateNightField, clearToday, setTodayKey, setCurrent, entries, saveCurrent }) {
+    const [calendarVisible, setCalendarVisible] = useState(false);
+    const handleDateSelect = (day) => {
+        setTodayKey(day.dateString);
+        if (entries[day.dateString] && typeof entries[day.dateString] === 'object') {
+            setCurrent(entries[day.dateString]);
+        } else {
+            setCurrent(getEmptyEntry());
+        }
+        setCalendarVisible(false);
+    };
+    // Auto-save wrapper for field changes
+    const autoSaveUpdateGratitude = (index, text) => {
+        const g = Array.isArray(current?.morning?.gratitude) ? [...current.morning.gratitude] : ['', '', ''];
+        g[index] = text;
+        const updated = { ...current, morning: { ...current.morning, gratitude: g } };
+        setCurrent(updated);
+        saveCurrent(updated);
+    };
+    const autoSaveToggleMidC = (idx) => {
+        const mid = { ...current.midday };
+        const caught = Array.isArray(mid.caught) ? [...mid.caught] : [false, false, false];
+        caught[idx] = !caught[idx];
+        mid.caught = caught;
+        const updated = { ...current, midday: mid };
+        setCurrent(updated);
+        saveCurrent(updated);
+    };
+    const autoSaveUpdateMidReframe = (text) => {
+        const updated = { ...current, midday: { ...current.midday, reframe: text } };
+        setCurrent(updated);
+        saveCurrent(updated);
+    };
+    const autoSaveUpdateNightField = (field, text) => {
+        const updated = { ...current, night: { ...current.night, [field]: text } };
+        setCurrent(updated);
+        saveCurrent(updated);
+    };
+    // Get today's date string
+    const todayDate = new Date().toLocaleDateString('en-US', {
+        year: 'numeric', month: 'long', day: 'numeric'
+    });
+
     return (
-        <SafeAreaView style={styles.container}>
-            <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-                <Header />
-                <Text style={styles.subtitle}>Date: {todayKey}</Text>
-                <Section title="Morning — Gratitude (2 min)">
-                    <Text style={styles.label}>List 3 things you're grateful for</Text>
-                    {(current?.morning?.gratitude ?? ['', '', '']).map((g, i) => (
+        <SafeAreaView style={{ flex: 1 }}>
+            <TopBar
+                date={todayDate}
+                onClear={clearToday}
+                onDatePress={() => setCalendarVisible(true)}
+            />
+            <View style={{ marginTop: 60, flex: 1 }}>
+                <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+                    <Modal
+                        visible={calendarVisible}
+                        transparent
+                        animationType="fade"
+                        onRequestClose={() => setCalendarVisible(false)}
+                    >
+                        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#00000088' }}>
+                            <View style={{ backgroundColor: '#fff', borderRadius: 12, padding: 16, elevation: 4 }}>
+                                <Calendar
+                                    onDayPress={handleDateSelect}
+                                    markedDates={{ [todayKey]: { selected: true } }}
+                                    initialDate={todayKey}
+                                />
+                                <TouchableOpacity onPress={() => setCalendarVisible(false)} style={{ marginTop: 12 }}>
+                                    <Text style={{ color: '#0b7cff', textAlign: 'center' }}>Close</Text>
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+                    </Modal>
+                    <Section title="Morning — Gratitude (2 min)">
+                        <Text style={styles.label}>List 3 things you're grateful for</Text>
+                        {(current?.morning?.gratitude ?? ['', '', '']).map((g, i) => (
+                            <TextInput
+                                key={i}
+                                value={g}
+                                onChangeText={(t) => autoSaveUpdateGratitude(i, t)}
+                                placeholder={`Gratitude ${i + 1}`}
+                                style={styles.input}
+                                placeholderTextColor="#88888888"
+                            />
+                        ))}
+                    </Section>
+                    <Section title="Midday — Awareness Check (1 min)">
+                        <Text style={styles.label}>Did you notice any of these?</Text>
+                        <View style={styles.rowWrap}>
+                            {['Complaining', 'Comparing', 'Criticizing'].map((label, idx) => (
+                                <TouchableOpacity
+                                    key={label}
+                                    style={[styles.checkbox, (current?.midday?.caught?.[idx]) && styles.checkboxOn]}
+                                    onPress={() => autoSaveToggleMidC(idx)}
+                                >
+                                    <Text style={styles.checkboxText}>{current?.midday?.caught?.[idx] ? '✓' : '+'}</Text>
+                                    <Text style={styles.checkboxLabel}>{label}</Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+                        <Text style={[styles.label, { marginTop: 8 }]}>Reframe / Note</Text>
                         <TextInput
-                            key={i}
-                            value={g}
-                            onChangeText={(t) => updateGratitude(i, t)}
-                            placeholder={`Gratitude ${i + 1}`}
+                            value={current?.midday?.reframe ?? ''}
+                            onChangeText={autoSaveUpdateMidReframe}
+                            placeholder="How can I reframe this?"
+                            style={[styles.input, { height: 80 }]}
+                            multiline
+                            placeholderTextColor="#88888888"
+                        />
+                    </Section>
+                    <Section title="Night — Growth Reflection (2 min)">
+                        <Text style={styles.label}>One thing that went well</Text>
+                        <TextInput
+                            value={current?.night?.wentWell ?? ''}
+                            onChangeText={(t) => autoSaveUpdateNightField('wentWell', t)}
+                            placeholder="Went well..."
                             style={styles.input}
                             placeholderTextColor="#88888888"
                         />
-                    ))}
-                </Section>
-                <Section title="Midday — Awareness Check (1 min)">
-                    <Text style={styles.label}>Did you notice any of these?</Text>
-                    <View style={styles.rowWrap}>
-                        {['Complaining', 'Comparing', 'Criticizing'].map((label, idx) => (
-                            <TouchableOpacity
-                                key={label}
-                                style={[styles.checkbox, (current?.midday?.caught?.[idx]) && styles.checkboxOn]}
-                                onPress={() => toggleMidC(idx)}
-                            >
-                                <Text style={styles.checkboxText}>{current?.midday?.caught?.[idx] ? '✓' : '+'}</Text>
-                                <Text style={styles.checkboxLabel}>{label}</Text>
-                            </TouchableOpacity>
-                        ))}
-                    </View>
-                    <Text style={[styles.label, { marginTop: 8 }]}>Reframe / Note</Text>
-                    <TextInput
-                        value={current?.midday?.reframe ?? ''}
-                        onChangeText={updateMidReframe}
-                        placeholder="How can I reframe this?"
-                        style={[styles.input, { height: 80 }]}
-                        multiline
-                        placeholderTextColor="#88888888"
-                    />
-                </Section>
-                <Section title="Night — Growth Reflection (2 min)">
-                    <Text style={styles.label}>One thing that went well</Text>
-                    <TextInput
-                        value={current?.night?.wentWell ?? ''}
-                        onChangeText={(t) => updateNightField('wentWell', t)}
-                        placeholder="Went well..."
-                        style={styles.input}
-                        placeholderTextColor="#88888888"
-                    />
-                    <Text style={styles.label}>One thing I handled better than before</Text>
-                    <TextInput
-                        value={current?.night?.handled ?? ''}
-                        onChangeText={(t) => updateNightField('handled', t)}
-                        placeholder="Handled better..."
-                        style={styles.input}
-                        placeholderTextColor="#88888888"
-                    />
-                    <Text style={styles.label}>One thing to improve tomorrow</Text>
-                    <TextInput
-                        value={current?.night?.improve ?? ''}
-                        onChangeText={(t) => updateNightField('improve', t)}
-                        placeholder="Improve tomorrow..."
-                        style={styles.input}
-                        placeholderTextColor="#88888888"
-                    />
-                </Section>
-                <View style={styles.actionsRow}>
-                    <SmallButton title="Save Today" onPress={saveCurrent} />
-                    <SmallButton title="Clear Today" onPress={clearToday} />
-                </View>
-                <View style={{ height: 40 }} />
-            </ScrollView>
+                        <Text style={styles.label}>One thing I handled better than before</Text>
+                        <TextInput
+                            value={current?.night?.handled ?? ''}
+                            onChangeText={(t) => autoSaveUpdateNightField('handled', t)}
+                            placeholder="Handled better..."
+                            style={styles.input}
+                            placeholderTextColor="#88888888"
+                        />
+                        <Text style={styles.label}>One thing to improve tomorrow</Text>
+                        <TextInput
+                            value={current?.night?.improve ?? ''}
+                            onChangeText={(t) => autoSaveUpdateNightField('improve', t)}
+                            placeholder="Improve tomorrow..."
+                            style={styles.input}
+                            placeholderTextColor="#88888888"
+                        />
+                    </Section>
+                    <View style={{ height: 40 }} />
+                </ScrollView>
+            </View>
         </SafeAreaView>
     );
 }
@@ -240,7 +305,7 @@ const HistoryScreenWrapper = (props) => (
 );
 
 export default function App() {
-    const todayKey = getTodayKey();
+    const [todayKey, setTodayKey] = useState(getTodayKey());
     const [entries, setEntries] = useState({});
     const [current, setCurrent] = useState(getEmptyEntry());
     const [loading, setLoading] = useState(true);
@@ -268,12 +333,12 @@ export default function App() {
         }
     }
 
-    async function saveCurrent() {
+    async function saveCurrent(entryArg) {
         try {
-            const updated = { ...entries, [todayKey]: current };
+            const entryToSave = entryArg || current;
+            const updated = { ...entries, [todayKey]: entryToSave };
             await Storage.setItem(STORAGE_KEY, JSON.stringify(updated));
             setEntries(updated);
-            Alert.alert('Saved', "Today's checklist was saved.");
         } catch (e) {
             console.warn('Save failed', e);
             Alert.alert('Error', 'Could not save.');
@@ -303,6 +368,9 @@ export default function App() {
     }
 
     function clearToday() {
+        // Immediately reset UI
+        setCurrent(getEmptyEntry());
+        // Remove today's entry from storage
         Alert.alert('Clear', "Clear today's entry?", [
             { text: 'Cancel', style: 'cancel' },
             {
@@ -359,6 +427,9 @@ export default function App() {
                             updateNightField={updateNightField}
                             saveCurrent={saveCurrent}
                             clearToday={clearToday}
+                            setTodayKey={setTodayKey}
+                            setCurrent={setCurrent}
+                            entries={entries}
                         />
                     )}
                 </Tab.Screen>
@@ -393,6 +464,17 @@ function getTodayKey() {
     return `${y}-${m}-${day}`;
 }
 
+function formatDateString(dateStr) {
+    // dateStr: 'YYYY-MM-DD'
+    const [year, month, day] = dateStr.split('-');
+    const months = [
+        'January', 'February', 'March', 'April', 'May', 'June',
+        'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+    const monthName = months[parseInt(month, 10) - 1];
+    return `${monthName} ${parseInt(day, 10)}, ${year}`;
+}
+
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: '#fff' },
     header: {
@@ -423,11 +505,49 @@ const styles = StyleSheet.create({
     checkboxOn: { backgroundColor: '#daf0da', borderColor: '#9ad49a' },
     checkboxText: { fontWeight: '700', width: 20, textAlign: 'center' },
     checkboxLabel: { marginLeft: 6 },
-    actionsRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 12 },
+    topRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 8,
+        justifyContent: 'flex-start',
+    },
+    iconButtonRow: {
+        flexDirection: 'row',
+        marginLeft: 12,
+        alignItems: 'center',
+    },
+    iconButton: {
+        backgroundColor: '#f7f7f8',
+        borderRadius: 16,
+        padding: 8,
+        marginLeft: 6,
+        borderWidth: 1,
+        borderColor: '#e0e0e0',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
     btn: { backgroundColor: '#0b7cff', paddingVertical: 10, paddingHorizontal: 14, borderRadius: 8, marginRight: 8 },
     btnText: { color: '#fff', fontWeight: '600' },
     historyItem: { paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#eee' },
     historyDate: { fontWeight: '700' },
     historyMeta: { color: '#666' },
     muted: { color: '#666' },
+    dateButton: {
+        backgroundColor: '#eaf4ff',
+        borderColor: '#0b7cff',
+        borderWidth: 1,
+        borderRadius: 20,
+        paddingVertical: 8,
+        paddingHorizontal: 18,
+        alignSelf: 'flex-start',
+        marginBottom: 16,
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    dateButtonText: {
+        color: '#0b7cff',
+        fontWeight: 'bold',
+        fontSize: 16,
+        letterSpacing: 0.5,
+    },
 });
