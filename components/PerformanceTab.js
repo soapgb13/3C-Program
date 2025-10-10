@@ -5,17 +5,46 @@ import { Ionicons } from '@expo/vector-icons';
 
 const chartWidth = Dimensions.get('window').width - 32;
 
-const consistencyData = {
-  labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
-  datasets: [{ data: [3, 4, 5, 2, 4, 5, 4], strokeWidth: 2 }],
-};
-const frequencyData = {
-  labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
-  datasets: [{ data: [2, 3, 1, 4, 2, 3, 2], strokeWidth: 2 }],
-};
-const awarenessData = {
-  labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
-  datasets: [{ data: [60, 70, 80, 75, 90, 85, 88], strokeWidth: 2 }],
+function getLastNDays(entries, n = 7) {
+  const allDates = Object.keys(entries || {}).sort((a, b) => a.localeCompare(b));
+  const lastDates = allDates.slice(-n);
+  return lastDates;
+}
+
+function getConsistencyData(entries) {
+  const lastDates = getLastNDays(entries, 7);
+  const labels = lastDates.map(date => {
+    const [year, month, day] = date.split('-');
+    return `${month}/${day}`;
+  });
+  const data = lastDates.map(date => {
+    const entry = entries[date] || {};
+    let count = 0;
+    // Morning gratitude (array of 3)
+    if (entry.morning && Array.isArray(entry.morning.gratitude)) {
+      count += entry.morning.gratitude.filter(g => g && g.trim()).length;
+    }
+    // Night wentWell, handled, improve (3 fields)
+    if (entry.night) {
+      if (entry.night.wentWell && entry.night.wentWell.trim()) count += 1;
+      if (entry.night.handled && entry.night.handled.trim()) count += 1;
+      if (entry.night.improve && entry.night.improve.trim()) count += 1;
+    }
+    // Calculate percentage out of 6
+    return Math.round((count / 6) * 100);
+  });
+  return { labels, datasets: [{ data, strokeWidth: 2 }], yAxisMin: 0, yAxisMax: 100 };
+}
+
+const chartConfig = {
+  backgroundColor: '#fff',
+  backgroundGradientFrom: '#fff',
+  backgroundGradientTo: '#fff',
+  decimalPlaces: 0,
+  color: (opacity = 1) => `rgba(0, 122, 255, ${opacity})`,
+  labelColor: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
+  style: { borderRadius: 16 },
+  propsForBackgroundLines: { strokeDasharray: '' },
 };
 
 function CollapsibleChart({ title, expanded, onToggle, data }) {
@@ -32,28 +61,38 @@ function CollapsibleChart({ title, expanded, onToggle, data }) {
           height={220}
           chartConfig={chartConfig}
           style={{ marginVertical: 8, borderRadius: 16 }}
+          fromZero={true}
+          yAxisSuffix="%"
+          yAxisInterval={20}
+          segments={5}
+          yLabelsOffset={8}
+          bezier
+          yAxisMin={0}
+          yAxisMax={100}
         />
       )}
     </View>
   );
 }
 
-const chartConfig = {
-  backgroundColor: '#fff',
-  backgroundGradientFrom: '#fff',
-  backgroundGradientTo: '#fff',
-  decimalPlaces: 0,
-  color: (opacity = 1) => `rgba(0, 122, 255, ${opacity})`,
-  labelColor: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
-  style: { borderRadius: 16 },
-};
-
-export default function PerformanceTab() {
+export default function PerformanceTab({ entries = {} }) {
   const [expanded, setExpanded] = useState({
     consistency: true,
     frequency: false,
     awareness: false,
   });
+
+  const consistencyData = getConsistencyData(entries);
+
+  // ...existing static data for other charts...
+  const frequencyData = {
+    labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+    datasets: [{ data: [2, 3, 1, 4, 2, 3, 2], strokeWidth: 2 }],
+  };
+  const awarenessData = {
+    labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+    datasets: [{ data: [60, 70, 80, 75, 90, 85, 88], strokeWidth: 2 }],
+  };
 
   return (
     <View style={styles.container}>

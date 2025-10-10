@@ -26,6 +26,7 @@ import { Calendar } from 'react-native-calendars';
 import TopBar from './components/TopBar';
 import { SafeAreaView as SafeAreaViewRN } from 'react-native';
 import { SafeAreaView as SafeAreaViewSA, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 
 // NOTE: We avoid a static top-level `import AsyncStorage from '@react-native-async-storage/async-storage'`
 // because some bundlers/environments (web preview, certain snack/embed systems) fail to resolve
@@ -149,7 +150,7 @@ function HistoryScreen({ entries }) {
     );
 }
 
-function HomeScreen({ todayKey, current, updateGratitude, toggleMidC, updateMidReframe, updateNightField, clearToday, setTodayKey, setCurrent, entries, saveCurrent }) {
+function HomeScreen({ todayKey, current, updateGratitude, toggleMidC, updateMidReframe, updateNightField, clearToday, setTodayKey, setCurrent, entries, saveCurrent, storeVersion }) {
     const [calendarVisible, setCalendarVisible] = useState(false);
     const [expandedSections, setExpandedSections] = useState({ morning: true, midday: true, night: true });
     const handleToggleSection = (section) => {
@@ -196,6 +197,26 @@ function HomeScreen({ todayKey, current, updateGratitude, toggleMidC, updateMidR
         year: 'numeric', month: 'long', day: 'numeric'
     });
     const insets = useSafeAreaInsets();
+
+    useFocusEffect(
+        React.useCallback(() => {
+            // Reload today's entry from entries when tab is focused
+            if (entries[todayKey] && typeof entries[todayKey] === 'object') {
+                setCurrent(entries[todayKey]);
+            } else {
+                setCurrent(getEmptyEntry());
+            }
+        }, [entries, todayKey])
+    );
+
+    // Also respond to storeVersion changes (e.g., clear/update from other tabs)
+    React.useEffect(() => {
+        if (entries[todayKey] && typeof entries[todayKey] === 'object') {
+            setCurrent(entries[todayKey]);
+        } else {
+            setCurrent(getEmptyEntry());
+        }
+    }, [storeVersion, entries, todayKey]);
 
     return (
         <SafeAreaViewSA style={{ flex: 1, paddingTop: insets.top }}>
@@ -331,6 +352,7 @@ export default function App() {
     const [entries, setEntries] = useState({});
     const [current, setCurrent] = useState(getEmptyEntry());
     const [loading, setLoading] = useState(true);
+    const [storeVersion, setStoreVersion] = useState(0); // bump to force sync
 
     useEffect(() => { loadEntries(); }, []);
     useEffect(() => {
@@ -347,6 +369,7 @@ export default function App() {
             const parsed = raw ? JSON.parse(raw) : {};
             if (parsed && typeof parsed === 'object') setEntries(parsed);
             else setEntries({});
+            setStoreVersion(v => v + 1);
         } catch (e) {
             console.warn('Failed to load entries', e);
             setEntries({});
@@ -358,9 +381,17 @@ export default function App() {
     async function saveCurrent(entryArg) {
         try {
             const entryToSave = entryArg || current;
-            const updated = { ...entries, [todayKey]: entryToSave };
+            // Reload latest stored entries to avoid overwriting changes from other tabs/instances
+            const raw = await Storage.getItem(STORAGE_KEY);
+            const parsed = raw ? JSON.parse(raw) : {};
+            const updated = { ...parsed, [todayKey]: entryToSave };
             await Storage.setItem(STORAGE_KEY, JSON.stringify(updated));
+            // On web ensure localStorage is explicitly updated (some environments are quirky)
+            if (typeof window !== 'undefined' && window.localStorage) {
+                try { window.localStorage.setItem(STORAGE_KEY, JSON.stringify(updated)); } catch (e) { /* ignore */ }
+            }
             setEntries(updated);
+            setStoreVersion(v => v + 1);
         } catch (e) {
             console.warn('Save failed', e);
             Alert.alert('Error', 'Could not save.');
@@ -390,28 +421,46 @@ export default function App() {
     }
 
     function clearToday() {
-        // Immediately reset UI
-        setCurrent(getEmptyEntry());
-        // Remove today's entry from storage
-        Alert.alert('Clear', "Clear today's entry?", [
-            { text: 'Cancel', style: 'cancel' },
-            {
-                text: 'Clear',
-                style: 'destructive',
-                onPress: async () => {
+        // Cross-platform confirmation: use window.confirm on web for reliable behavior,
+        // otherwise show native Alert and await the user's choice.
+        const confirmClear = async () => {
+            if (typeof window !== 'undefined' && typeof window.confirm === 'function') {
+                return window.confirm("Clear today's entry?");
+            }
+            // For native, wrap Alert.alert in a Promise
+            return new Promise((resolve) => {
+                Alert.alert('Clear', "Clear today's entry?", [
+                    { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+                    { text: 'Clear', style: 'destructive', onPress: () => resolve(true) },
+                ]);
+            });
+        };
+
+        (async () => {
+            try {
+                const ok = await confirmClear();
+                if (!ok) return;
+                // Perform clear using the latest stored entries
+                const raw = await Storage.getItem(STORAGE_KEY);
+                const parsed = raw ? JSON.parse(raw) : {};
+                const updated = { ...parsed };
+                delete updated[todayKey];
+                await Storage.setItem(STORAGE_KEY, JSON.stringify(updated));
+                // Also update window.localStorage explicitly on web
+                if (typeof window !== 'undefined' && window.localStorage) {
                     try {
-                        const updated = { ...entries };
-                        delete updated[todayKey];
-                        await Storage.setItem(STORAGE_KEY, JSON.stringify(updated));
-                        setEntries(updated);
-                        setCurrent(getEmptyEntry()); // Ensure UI clears immediately
-                    } catch (e) {
-                        console.warn('Clear failed', e);
-                        Alert.alert('Error', 'Could not clear today.');
-                    }
-                },
-            },
-        ]);
+                        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+                    } catch (e) { /* ignore */ }
+                }
+                // Immediately update in-memory state and bump version
+                setEntries(updated);
+                setCurrent(getEmptyEntry());
+                setStoreVersion(v => v + 1);
+            } catch (e) {
+                console.warn('Clear failed', e);
+                Alert.alert('Error', 'Could not clear today.');
+            }
+        })();
     }
 
     if (loading) return <View style={styles.container}><Text>Loading...</Text></View>;
@@ -440,8 +489,9 @@ export default function App() {
                         ),
                     }}
                 >
-                    {() => (
+                    {(screenProps) => (
                         <HomeScreen
+                            {...screenProps}
                             todayKey={todayKey}
                             current={current}
                             updateGratitude={updateGratitude}
@@ -453,6 +503,7 @@ export default function App() {
                             setTodayKey={setTodayKey}
                             setCurrent={setCurrent}
                             entries={entries}
+                            storeVersion={storeVersion}
                         />
                     )}
                 </Tab.Screen>
@@ -464,17 +515,18 @@ export default function App() {
                         ),
                     }}
                 >
-                    {() => <HistoryTab entries={entries} />}
+                    {(screenProps) => <HistoryTab {...screenProps} entries={entries} storeVersion={storeVersion} />}
                 </Tab.Screen>
                 <Tab.Screen
                     name="Performance"
-                    component={PerformanceTab}
                     options={{
                         tabBarIcon: ({ color, size }) => (
                             <Ionicons name="stats-chart" size={size} color={color} />
                         ),
                     }}
-                />
+                >
+                    {(screenProps) => <PerformanceTab {...screenProps} entries={entries} storeVersion={storeVersion} />}
+                </Tab.Screen>
             </Tab.Navigator>
         </NavigationContainer>
     );
