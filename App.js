@@ -23,6 +23,8 @@ import { Ionicons } from '@expo/vector-icons';
 import HistoryTab from './components/HistoryTab';
 import { Calendar } from 'react-native-calendars';
 import TopBar from './components/TopBar';
+import { SafeAreaView as SafeAreaViewRN } from 'react-native';
+import { SafeAreaView as SafeAreaViewSA, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // NOTE: We avoid a static top-level `import AsyncStorage from '@react-native-async-storage/async-storage'`
 // because some bundlers/environments (web preview, certain snack/embed systems) fail to resolve
@@ -80,12 +82,14 @@ const Storage = (() => {
     };
 })();
 
-function Section({ title, children = null }) {
-    // children is optional — render if present
+function Section({ title, expanded, onToggle, children = null }) {
     return (
         <View style={styles.section}>
-            <Text style={styles.sectionTitle}>{title}</Text>
-            {children ?? null}
+            <TouchableOpacity style={styles.sectionHeader} onPress={onToggle}>
+                <Text style={styles.sectionTitle}>{title}</Text>
+                <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={20} color="#333" />
+            </TouchableOpacity>
+            {expanded && (children ?? null)}
         </View>
     );
 }
@@ -146,6 +150,10 @@ function HistoryScreen({ entries }) {
 
 function HomeScreen({ todayKey, current, updateGratitude, toggleMidC, updateMidReframe, updateNightField, clearToday, setTodayKey, setCurrent, entries, saveCurrent }) {
     const [calendarVisible, setCalendarVisible] = useState(false);
+    const [expandedSections, setExpandedSections] = useState({ morning: true, midday: true, night: true });
+    const handleToggleSection = (section) => {
+        setExpandedSections((prev) => ({ ...prev, [section]: !prev[section] }));
+    };
     const handleDateSelect = (day) => {
         setTodayKey(day.dateString);
         if (entries[day.dateString] && typeof entries[day.dateString] === 'object') {
@@ -186,11 +194,12 @@ function HomeScreen({ todayKey, current, updateGratitude, toggleMidC, updateMidR
     const todayDate = new Date().toLocaleDateString('en-US', {
         year: 'numeric', month: 'long', day: 'numeric'
     });
+    const insets = useSafeAreaInsets();
 
     return (
-        <SafeAreaView style={{ flex: 1 }}>
+        <SafeAreaViewSA style={{ flex: 1, paddingTop: insets.top }}>
             <TopBar
-                date={todayDate}
+                date={formatDateString(todayKey)}
                 onClear={clearToday}
                 onDatePress={() => setCalendarVisible(true)}
             />
@@ -215,7 +224,11 @@ function HomeScreen({ todayKey, current, updateGratitude, toggleMidC, updateMidR
                             </View>
                         </View>
                     </Modal>
-                    <Section title="Morning — Gratitude (2 min)">
+                    <Section
+                        title="Morning — Gratitude (2 min)"
+                        expanded={expandedSections.morning}
+                        onToggle={() => handleToggleSection('morning')}
+                    >
                         <Text style={styles.label}>List 3 things you're grateful for</Text>
                         {(current?.morning?.gratitude ?? ['', '', '']).map((g, i) => (
                             <TextInput
@@ -228,7 +241,11 @@ function HomeScreen({ todayKey, current, updateGratitude, toggleMidC, updateMidR
                             />
                         ))}
                     </Section>
-                    <Section title="Midday — Awareness Check (1 min)">
+                    <Section
+                        title="Midday — Awareness Check (1 min)"
+                        expanded={expandedSections.midday}
+                        onToggle={() => handleToggleSection('midday')}
+                    >
                         <Text style={styles.label}>Did you notice any of these?</Text>
                         <View style={styles.rowWrap}>
                             {['Complaining', 'Comparing', 'Criticizing'].map((label, idx) => (
@@ -252,7 +269,11 @@ function HomeScreen({ todayKey, current, updateGratitude, toggleMidC, updateMidR
                             placeholderTextColor="#88888888"
                         />
                     </Section>
-                    <Section title="Night — Growth Reflection (2 min)">
+                    <Section
+                        title="Night — Growth Reflection (2 min)"
+                        expanded={expandedSections.night}
+                        onToggle={() => handleToggleSection('night')}
+                    >
                         <Text style={styles.label}>One thing that went well</Text>
                         <TextInput
                             value={current?.night?.wentWell ?? ''}
@@ -281,7 +302,7 @@ function HomeScreen({ todayKey, current, updateGratitude, toggleMidC, updateMidR
                     <View style={{ height: 40 }} />
                 </ScrollView>
             </View>
-        </SafeAreaView>
+        </SafeAreaViewSA>
     );
 }
 
@@ -497,6 +518,14 @@ const styles = StyleSheet.create({
     title: { fontSize: 20, fontWeight: '700', marginBottom: 4 },
     subtitle: { color: '#444', marginBottom: 12 },
     section: { marginVertical: 10, padding: 12, borderRadius: 8, backgroundColor: '#f7f7f8' },
+    sectionHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingVertical: 4,
+        paddingHorizontal: 2,
+        marginBottom: 4,
+    },
     sectionTitle: { fontSize: 16, fontWeight: '600', marginBottom: 8 },
     label: { color: '#333', marginBottom: 6 },
     input: { backgroundColor: '#fff', borderColor: '#ddd', borderWidth: 1, borderRadius: 6, padding: 8, marginBottom: 8 },
