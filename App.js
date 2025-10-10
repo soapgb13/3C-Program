@@ -21,6 +21,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import HistoryTab from './components/HistoryTab';
+import PerformanceTab from './components/PerformanceTab';
 import { Calendar } from 'react-native-calendars';
 import TopBar from './components/TopBar';
 import { SafeAreaView as SafeAreaViewRN } from 'react-native';
@@ -423,6 +424,7 @@ export default function App() {
                         let iconName;
                         if (route.name === 'Home') iconName = 'home';
                         else if (route.name === 'History') iconName = 'calendar';
+                        else if (route.name === 'Performance') iconName = 'stats-chart';
                         return <Ionicons name={iconName} size={size} color={color} />;
                     },
                     tabBarActiveTintColor: '#0b7cff',
@@ -464,6 +466,15 @@ export default function App() {
                 >
                     {() => <HistoryTab entries={entries} />}
                 </Tab.Screen>
+                <Tab.Screen
+                    name="Performance"
+                    component={PerformanceTab}
+                    options={{
+                        tabBarIcon: ({ color, size }) => (
+                            <Ionicons name="stats-chart" size={size} color={color} />
+                        ),
+                    }}
+                />
             </Tab.Navigator>
         </NavigationContainer>
     );
