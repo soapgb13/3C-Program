@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, Text, TouchableOpacity } from 'react-native';
 import { Calendar } from 'react-native-calendars';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,14 +17,20 @@ const getCurrentMonthFirstDay = () => {
   return '2025-10-01';
 };
 
-const HistoryTab = ({ entries = {} }) => {
+const HistoryTab = ({ entries = {}, storeVersion = 0 }) => {
   const [selectedDate, setSelectedDate] = useState('');
   const markedDates = getMarkedDates(entries);
   const initialDate = getCurrentMonthFirstDay();
 
+  useEffect(() => {
+    // When storage updates, clear any selected date so UI reflects new data
+    setSelectedDate('');
+  }, [storeVersion]);
+
   return (
     <View style={styles.container}>
       <Calendar
+        key={String(storeVersion)}
         initialDate={initialDate}
         markingType={'custom'}
         markedDates={markedDates}
